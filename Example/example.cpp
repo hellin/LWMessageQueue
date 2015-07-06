@@ -25,12 +25,14 @@ void outputThreadRun(MessageQueue* messageQueue) {
 	MessageQueue::ThreadChannelOutput channel1 = messageQueue->getThreadChannelOutput(1);
 
 	uint32_t receivedMessages = 0;
+	uint32_t messageSum = 0;
 	while (receivedMessages < (numMessages * numChannels)) {
 		// Channel 0
 		{
 			const uint32_t pendingMessages = channel0.getNumMessages();
 			for (uint32_t messageIndex = 0; messageIndex < pendingMessages; ++messageIndex) {
 				MessageQueue::Message message = channel0.popMessage();
+				messageSum += message.data.message1.value;
 				++receivedMessages;
 			}
 		}
@@ -40,12 +42,13 @@ void outputThreadRun(MessageQueue* messageQueue) {
 			const uint32_t pendingMessages = channel1.getNumMessages();
 			for (uint32_t messageIndex = 0; messageIndex < pendingMessages; ++messageIndex) {
 				MessageQueue::Message message = channel1.popMessage();
+				messageSum += message.data.message1.value;
 				++receivedMessages;
 			}
 		}
 	}
 
-	fprintf(stdout, "Output thread done, received %u messages\n", receivedMessages);
+	fprintf(stdout, "Output thread done, received %u messages, sum %u\n", receivedMessages, messageSum);
 }
 
 int main(int argc, char** argv) {
