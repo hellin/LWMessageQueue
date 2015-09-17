@@ -1,10 +1,10 @@
 #pragma once
 
 #include <array>
+#include <atomic>
+#include <assert.h>
 #include <stdint.h>
 #include <thread>
-#include "Internal/WaitFreeFifo.h"
-#include "User/UserDefinedMessage.h"
 
 namespace LWMessageQueue {
 
@@ -31,15 +31,51 @@ namespace LWMessageQueue {
 		This also makes sure the output thread will finish popping messages. In debug builds, an assert will be hit 
 		if the channel is empty when popping a message.
 */
-template<uint32_t QUEUE_SIZE, uint32_t NUM_CHANNELS>
-class MessageQueue {
+template<uint32_t QUEUE_SIZE, uint32_t NUM_CHANNELS, typename MESSAGE>
+class LWMessageQueue {
 public:
-	struct Message {
-		User::MessageType type;
-		User::MessageData data;
-	};
+	class ThreadChannel {
+	public:
+		ThreadChannel()
+			: readPoint(0),
+			writePoint(0),
+			numElements(0)
+		{
+		}
 
-	using ThreadChannel = Internal::WaitFreeFifo<Message, QUEUE_SIZE>;
+		uint32_t size() const {
+			return numElements;
+		}
+
+		void pushBack(const MESSAGE& inElement)  {
+			assert(numElements < QUEUE_SIZE);
+			assert(writePoint < QUEUE_SIZE);
+
+			elements[writePoint] = inElement;
+			writePoint = (writePoint + 1) % QUEUE_SIZE;
+			numElements.fetch_add(1);
+		}
+
+		MESSAGE popFront() {
+			assert(numElements > 0);
+			assert(readPoint < QUEUE_SIZE);
+
+			MESSAGE returnElement = elements[readPoint];
+			readPoint = (readPoint + 1) % QUEUE_SIZE;
+			numElements.fetch_sub(1);
+
+			return returnElement;
+		}
+
+	private:
+		MESSAGE elements[QUEUE_SIZE];
+		uint32_t readPoint;
+		uint32_t writePoint;
+		std::atomic<uint32_t> numElements;
+
+		ThreadChannel(const ThreadChannel&) = delete;
+		const ThreadChannel& operator=(const ThreadChannel&) = delete;
+	};
 
 	class ThreadChannelInput {
 	public:
@@ -59,7 +95,7 @@ public:
 				Push a message to the channel. The user must make sure the channel is not full before calling. Only 
 				one thread may push messages to a single channel.
 		*/
-		void pushMessage(Message& inMessage) {
+		void pushMessage(MESSAGE& inMessage) {
 			threadChannel.pushBack(inMessage);
 		}
 	private:
@@ -85,7 +121,7 @@ public:
 				Pop next message from the channel. The user must make sure that the channel is not empty before 
 				calling. Only one thread may pop messages from all channels.
 		*/
-		Message popMessage() {
+		MESSAGE popMessage() {
 			return threadChannel.popFront();
 		}
 	private:
@@ -94,7 +130,7 @@ public:
 
 	static const uint32_t numChannels = NUM_CHANNELS;
 
-	MessageQueue() {
+	LWMessageQueue() {
 	}
 
 	/**
@@ -118,8 +154,8 @@ public:
 private:
 	std::array<ThreadChannel, NUM_CHANNELS> threadChannels;
 
-	MessageQueue(const MessageQueue&) = delete;
-	const MessageQueue& operator=(const MessageQueue&) = delete;
+	LWMessageQueue(const LWMessageQueue&) = delete;
+	const LWMessageQueue& operator=(const LWMessageQueue&) = delete;
 };
 
 } // namespace LWMessageQueue

@@ -1,8 +1,4 @@
-#pragma once
-
-namespace LWMessageQueue {
-
-namespace User {
+#include <stdint.h>
 
 // Declare message data structs.
 
@@ -13,6 +9,13 @@ namespace User {
 
 struct Message1Data {
 	uint32_t value;
+	uint32_t anotherValue;
+};
+
+struct Message2Data {
+	uint32_t value;
+	uint32_t anotherValue;
+	char moreValues[2];
 };
 
 // End of message data structs.
@@ -20,15 +23,18 @@ struct Message1Data {
 // Add the message to the type enum.
 enum class MessageType {
 	//<Mesage_name>
-	Message1
+	Message1,
+	Message2
 };
 
 // Add the message data struct to the data union.
 union MessageData {
 	//<Message_name>Data <Message_name>;
 	Message1Data message1;
+	Message2Data message2;
 };
 
-} // namespace User
-
-} // namespace LWMessageQueue
+struct Message {
+	MessageType type;
+	MessageData data;
+};

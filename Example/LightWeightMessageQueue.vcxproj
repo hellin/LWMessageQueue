@@ -80,9 +80,8 @@
     <ClCompile Include="example.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\Internal\WaitFreeFifo.h" />
     <ClInclude Include="..\MessageQueue.h" />
-    <ClInclude Include="..\User\UserDefinedMessage.h" />
+    <ClInclude Include="Message.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
