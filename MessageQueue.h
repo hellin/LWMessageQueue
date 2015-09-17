@@ -98,6 +98,11 @@ public:
 		void pushMessage(MESSAGE& inMessage) {
 			threadChannel.pushBack(inMessage);
 		}
+
+		const ThreadChannelInput& operator=(const ThreadChannelInput& other) {
+			threadChannel = other.threadChannel;
+			return *this;
+		}
 	private:
 		ThreadChannel& threadChannel;
 	};
@@ -123,6 +128,11 @@ public:
 		*/
 		MESSAGE popMessage() {
 			return threadChannel.popFront();
+		}
+
+		const ThreadChannelOutput& operator=(const ThreadChannelOutput& other) {
+			threadChannel = other.threadChannel;
+			return *this;
 		}
 	private:
 		ThreadChannel& threadChannel;

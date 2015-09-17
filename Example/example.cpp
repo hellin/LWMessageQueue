@@ -4,9 +4,11 @@
 #include "MessageQueue.h"
 
 const uint32_t numChannels = 2;
-const uint32_t numMessages = 10;
+const uint32_t numMessages = 1000;
+const uint32_t numMessagesPerThread = numMessages * 2;
+const uint32_t queueSize = 1024;
 
-using MessageQueue = LWMessageQueue::LWMessageQueue<1024, numChannels, Message>;
+using MessageQueue = LWMessageQueue::LWMessageQueue<queueSize, numChannels, Message>;
 
 void inputThread0Run(MessageQueue::ThreadChannelInput inChannel) {
 	for (uint32_t i = 0; i < numMessages; ++i) {
@@ -32,7 +34,7 @@ void inputThread0Run(MessageQueue::ThreadChannelInput inChannel) {
 			inChannel.pushMessage(message);
 		}
 	}
-	fprintf(stdout, "Input thread 0 done, sent %u messages.\n", numMessages * 2);
+	fprintf(stdout, "Input thread 0 done, sent %u messages.\n", numMessagesPerThread);
 }
 
 void inputThread1Run(MessageQueue::ThreadChannelInput inChannel) {
@@ -59,7 +61,7 @@ void inputThread1Run(MessageQueue::ThreadChannelInput inChannel) {
 			inChannel.pushMessage(message);
 		}
 	}
-	fprintf(stdout, "Input thread 1 done, sent %u messages.\n", numMessages * 2);
+	fprintf(stdout, "Input thread 1 done, sent %u messages.\n", numMessagesPerThread);
 }
 
 void verifyMessage(const uint32_t channelIndex, const Message& message) {
@@ -87,7 +89,7 @@ void outputThreadRun(MessageQueue* messageQueue) {
 	MessageQueue::ThreadChannelOutput channel1 = messageQueue->getThreadChannelOutput(1);
 
 	uint32_t receivedMessages = 0;
-	const uint32_t totalTestWantedMessages = numMessages * numChannels * 2;
+	const uint32_t totalTestWantedMessages = numMessagesPerThread * numChannels;
 
 	while (receivedMessages < totalTestWantedMessages) {
 		// Channel 0
@@ -114,7 +116,7 @@ void outputThreadRun(MessageQueue* messageQueue) {
 	fprintf(stdout, "Output thread done, received %u messages\n", receivedMessages);
 }
 
-int main(int argc, char** argv) {
+int main(int, char**) {
 	MessageQueue messageQueue;
 
 	std::thread outputThread(outputThreadRun, &messageQueue);

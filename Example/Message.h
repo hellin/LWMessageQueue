@@ -1,7 +1,9 @@
 #include <stdint.h>
 
-// Declare message data structs.
+// An example on how to declare messages of different types that can all be sent to 
+// the same message queue.
 
+// Declare message data structs.
 //struct <Message_name>Data {
 //	<type> <variable_name>;
 //	...
@@ -15,9 +17,8 @@ struct Message1Data {
 struct Message2Data {
 	uint32_t value;
 	uint32_t anotherValue;
-	char moreValues[2];
+	uint8_t moreValues[2];
 };
-
 // End of message data structs.
 
 // Add the message to the type enum.
