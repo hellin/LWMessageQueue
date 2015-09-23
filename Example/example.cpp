@@ -6,29 +6,27 @@
 const uint32_t numChannels = 2;
 const uint32_t numMessages = 1000;
 const uint32_t numMessagesPerThread = numMessages * 2;
-const uint32_t queueSize = 1024;
+const uint32_t queueSize = 2048;
 
-using MessageQueue = LWMessageQueue::LWMessageQueue<queueSize, numChannels, Message>;
+using MessageQueue = LWMessageQueue::LWMessageQueue<queueSize, numChannels, MessageUnion>;
 
 void inputThread0Run(MessageQueue::ThreadChannelInput inChannel) {
 	for (uint32_t i = 0; i < numMessages; ++i) {
 		{
-			Message message;
-			message.type = MessageType::Message1;
-			message.data.message1.value = 17;
-			message.data.message1.anotherValue = 4711;
+			Message1 message;
+			message.value = 17;
+			message.anotherValue = 4711;
 
 			assert(!inChannel.isFull());
 			inChannel.pushMessage(message);
 		}
 
 		{
-			Message message;
-			message.type = MessageType::Message2;
-			message.data.message2.value = 0;
-			message.data.message2.anotherValue = 0;
-			message.data.message2.moreValues[0] = 0;
-			message.data.message2.moreValues[1] = 0;
+			Message2 message;
+			message.value = 0;
+			message.anotherValue = 0;
+			message.moreValues[0] = 0;
+			message.moreValues[1] = 0;
 
 			assert(!inChannel.isFull());
 			inChannel.pushMessage(message);
@@ -40,22 +38,20 @@ void inputThread0Run(MessageQueue::ThreadChannelInput inChannel) {
 void inputThread1Run(MessageQueue::ThreadChannelInput inChannel) {
 	for (uint32_t i = 0; i < numMessages; ++i) {
 		{
-			Message message;
-			message.type = MessageType::Message1;
-			message.data.message1.value = 17;
-			message.data.message1.anotherValue = 4711;
+			Message1 message;
+			message.value = 17;
+			message.anotherValue = 4711;
 
 			assert(!inChannel.isFull());
 			inChannel.pushMessage(message);
 		}
 
 		{
-			Message message;
-			message.type = MessageType::Message2;
-			message.data.message2.value = 1;
-			message.data.message2.anotherValue = 1;
-			message.data.message2.moreValues[0] = 1;
-			message.data.message2.moreValues[1] = 1;
+			Message2 message;
+			message.value = 1;
+			message.anotherValue = 1;
+			message.moreValues[0] = 1;
+			message.moreValues[1] = 1;
 
 			assert(!inChannel.isFull());
 			inChannel.pushMessage(message);
@@ -64,22 +60,21 @@ void inputThread1Run(MessageQueue::ThreadChannelInput inChannel) {
 	fprintf(stdout, "Input thread 1 done, sent %u messages.\n", numMessagesPerThread);
 }
 
-void verifyMessage(const uint32_t channelIndex, const Message& message) {
-	switch (message.type)
-	{
-	case MessageType::Message1:
-		assert(message.data.message1.value == 17);
-		assert(message.data.message1.anotherValue == 4711);
-		break;
-	case MessageType::Message2:
-		assert(message.data.message2.value == channelIndex);
-		assert(message.data.message2.anotherValue == channelIndex);
-		assert(message.data.message2.moreValues[0] == channelIndex);
-		assert(message.data.message2.moreValues[1] == channelIndex);
-		break;
-	default:
+void verifyMessage(const uint32_t channelIndex, const MessageQueue::MessageContainer& messageContainer) {
+	if (messageContainer.isOfType<Message1>()) {
+		const Message1& message = messageContainer.getMessage<Message1>();
+		assert(message.value == 17);
+		assert(message.anotherValue == 4711);
+
+	} else if (messageContainer.isOfType<Message2>()) {
+		const Message2& message = messageContainer.getMessage<Message2>();
+		assert(message.value == channelIndex);
+		assert(message.anotherValue == channelIndex);
+		assert(message.moreValues[0] == channelIndex);
+		assert(message.moreValues[1] == channelIndex);
+
+	} else {
 		assert(false);
-		break;
 	}
 }
 
@@ -96,9 +91,9 @@ void outputThreadRun(MessageQueue* messageQueue) {
 		{
 			const uint32_t pendingMessages = channel0.getNumMessages();
 			for (uint32_t messageIndex = 0; messageIndex < pendingMessages; ++messageIndex) {
-				Message message = channel0.popMessage();
+				MessageQueue::MessageContainer messageContainer = channel0.popMessage();
 				++receivedMessages;
-				verifyMessage(0, message);
+				verifyMessage(0, messageContainer);
 			}
 		}
 
@@ -106,9 +101,9 @@ void outputThreadRun(MessageQueue* messageQueue) {
 		{
 			const uint32_t pendingMessages = channel1.getNumMessages();
 			for (uint32_t messageIndex = 0; messageIndex < pendingMessages; ++messageIndex) {
-				Message message = channel1.popMessage();
+				MessageQueue::MessageContainer messageContainer = channel1.popMessage();
 				++receivedMessages;
-				verifyMessage(1, message);
+				verifyMessage(1, messageContainer);
 			}
 		}
 	}
