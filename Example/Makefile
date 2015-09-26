@@ -4,9 +4,8 @@ CXXFLAGS=-Wall -Werror -I../ -std=c++11 -O3
 LDFLAGS=-lpthread
 
 DEPS = \
-	../MessageQueue.h \
-	../Internal/WaitFreeFifo.h \
-	../User/UserDefinedMessage.h
+	../LWMessageQueue.h \
+	Message.h
 
 OBJ = example.o
 

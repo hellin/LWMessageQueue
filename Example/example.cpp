@@ -1,7 +1,7 @@
 #include <assert.h>
 #include <thread>
+#include "LWMessageQueue.h"
 #include "Message.h"
-#include "MessageQueue.h"
 
 const uint32_t numChannels = 2;
 const uint32_t numMessages = 1000;
