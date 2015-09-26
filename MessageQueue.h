@@ -9,18 +9,15 @@ namespace LWMessageQueue {
 /**
 	@brief
 		A static size message queue used to send messages from many input threads to a single output thread. Input 
-		and output operations are thread safe and wait-free as long as there is exactly one channel per input thread 
-		and exactly one output thread.
+		and output operations are thread safe and wait-free as long as there is exactly one thread consuming messages. 
+		Messages are user defined POD type structs.
 
 	@details
-		SIZE is the number of allowed pending messages in one channel.
-		CHANNELS is the number of channels, i.e. the number of input threads.
-		MESSAGE should be a union of all available Message types. Message types are POD type structs with message 
-		specific data fields. See example message definitions and usage in Example/Message.h and Example/example.cpp.
-
-		The input threads should each get their own ThreadChannelInput instance to push messages from that input 
-		thread. The single output thread should get one ThreadChannelOutput instance per input thread to be able 
-		to pop messages from each input thread.
+		Messages are passed through ThreadChannels. Each thread producing messages (input thread) gets one 
+		ThreadChannelInput instance each, and the single consumer (output) thread gets one ThreadChannelOutput instance
+		per input thread. A good design pattern could be to let the consumer thread own the LWMessageQueue instance, 
+		and only pass ThreadChannelInput instances to the producer threads. If you need more consumers, simply create 
+		an LWMessageQueue instance per consumer thread.
 
 		It is up to the user to make sure not to push messages to a full channel. The channel (SIZE) must be 
 		dimensioned so that it never overflows. In debug builds, an assert will be hit if the channel is full when 
@@ -31,10 +28,23 @@ namespace LWMessageQueue {
 		This also makes sure the output thread will finish popping messages. In debug builds, an assert will be hit 
 		if the channel is empty when popping a message.
 
-		Messages of any type (from MESSAGE) can be pushed directly. When popping messages you get a 
-		LWMessageQueue<>::MessageContainer. To get the actual message from the container, first call 
-		MessageContainer::isTypeOf<TYPE>() to determine the type, and then call MessageContainer::getMessage<TYPE>() 
-		to get the message data.
+		Messages are defined as POD type structs, and a union of those structs is passed as a template parameter 
+		(MESSAGE) to LWMessageQueue. Push and pop operations copy the message data, so structs should be small enuough
+		so that this still is a cheap operation.
+
+		Messages of any type (from the MESSAGE union) can be pushed to an input channel. When popping messages you get 
+		an LWMessageQueue<>::MessageContainer instance. To get the actual message from the container, first call 
+		messageContainer.isOfType<TYPE>() to determine the type, and then call messageContainer.getMessage<TYPE>() 
+		to get the message data cast to the correct POD type struct.
+
+		See the Example/Message.h and Example/example.cpp for more details on how to use LWMessageQueue and how to 
+		define messages.
+
+		Template parameters:
+		SIZE is the number of allowed pending messages in one channel.
+		CHANNELS is the number of channels, i.e. the number of input/producer threads.
+		MESSAGE should be a union of all available Message types. Message types are POD type structs with message 
+		specific data fields. See example message definitions and usage in Example/Message.h and Example/example.cpp.
 */
 template<uint32_t SIZE, uint32_t CHANNELS, typename MESSAGE>
 class LWMessageQueue {
@@ -46,13 +56,13 @@ public:
 	*/
 	class MessageContainer {
 	public:
-		/** Get a reference to the message data, in the correct message type. */
+		/** Get a reference to the message data, as the correct message type. */
 		template<typename T>
-		const T& getMessage() const;
+		constexpr const T& getMessage() const;
 
 		/** Check if a message container contains a message of a specific type. */
 		template<typename T>
-		bool isOfType() const;
+		constexpr bool isOfType() const;
 
 	private:
 		uintptr_t typeId;
@@ -141,6 +151,9 @@ private:
 
 namespace Internal {
 
+/** Each type generates its own template instance of this function. Therefore the pointer to the static variable 
+	typeIdOf::typeId<T> will be unique for every type and can be used as a type id. 
+*/
 template<typename T>
 uintptr_t typeIdOf(const T&) {
 	static uintptr_t typeId = reinterpret_cast<uintptr_t>(&typeId);
@@ -151,52 +164,14 @@ uintptr_t typeIdOf(const T&) {
 
 template<uint32_t SIZE, uint32_t CHANNELS, typename MESSAGE>
 template<typename T>
-const T& LWMessageQueue<SIZE, CHANNELS, MESSAGE>::MessageContainer::getMessage() const {
+constexpr const T& LWMessageQueue<SIZE, CHANNELS, MESSAGE>::MessageContainer::getMessage() const {
 	return *(reinterpret_cast<const T*>(&message));
 }
 
 template<uint32_t SIZE, uint32_t CHANNELS, typename MESSAGE>
 template<typename T>
-bool LWMessageQueue<SIZE, CHANNELS, MESSAGE>::MessageContainer::isOfType() const {
+constexpr bool LWMessageQueue<SIZE, CHANNELS, MESSAGE>::MessageContainer::isOfType() const {
 	return Internal::typeIdOf(T()) == typeId;
-}
-
-template<uint32_t SIZE, uint32_t CHANNELS, typename MESSAGE>
-LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannel::ThreadChannel()
-	: readPoint(0),
-	writePoint(0),
-	numElements(0)
-{
-}
-
-template<uint32_t SIZE, uint32_t CHANNELS, typename MESSAGE>
-uint32_t LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannel::size() const {
-	return numElements;
-}
-
-template<uint32_t SIZE, uint32_t CHANNELS, typename MESSAGE>
-void LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannel::pushBack(
-	const MessageContainer& inElement)
-{
-	assert(numElements < SIZE);
-	assert(writePoint < SIZE);
-
-	elements[writePoint] = inElement;
-	writePoint = (writePoint + 1) % SIZE;
-	numElements.fetch_add(1);
-}
-
-template<uint32_t SIZE, uint32_t CHANNELS, typename MESSAGE>
-typename LWMessageQueue<SIZE, CHANNELS, MESSAGE>::MessageContainer 
-LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannel::popFront() {
-	assert(numElements > 0);
-	assert(readPoint < SIZE);
-
-	MessageContainer returnElement = elements[readPoint];
-	readPoint = (readPoint + 1) % SIZE;
-	numElements.fetch_sub(1);
-
-	return returnElement;
 }
 
 template<uint32_t SIZE, uint32_t CHANNELS, typename MESSAGE>
@@ -277,6 +252,44 @@ typename LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannelOutput
 LWMessageQueue<SIZE, CHANNELS, MESSAGE>::getThreadChannelOutput(const uint32_t inChannel) {
 	assert(inChannel < CHANNELS);
 	return ThreadChannelOutput(threadChannels[inChannel]);
+}
+
+template<uint32_t SIZE, uint32_t CHANNELS, typename MESSAGE>
+LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannel::ThreadChannel()
+	: readPoint(0),
+	writePoint(0),
+	numElements(0)
+{
+}
+
+template<uint32_t SIZE, uint32_t CHANNELS, typename MESSAGE>
+uint32_t LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannel::size() const {
+	return numElements;
+}
+
+template<uint32_t SIZE, uint32_t CHANNELS, typename MESSAGE>
+void LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannel::pushBack(
+	const MessageContainer& inElement)
+{
+	assert(numElements < SIZE);
+	assert(writePoint < SIZE);
+
+	elements[writePoint] = inElement;
+	writePoint = (writePoint + 1) % SIZE;
+	numElements.fetch_add(1);
+}
+
+template<uint32_t SIZE, uint32_t CHANNELS, typename MESSAGE>
+typename LWMessageQueue<SIZE, CHANNELS, MESSAGE>::MessageContainer 
+LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannel::popFront() {
+	assert(numElements > 0);
+	assert(readPoint < SIZE);
+
+	MessageContainer returnElement = elements[readPoint];
+	readPoint = (readPoint + 1) % SIZE;
+	numElements.fetch_sub(1);
+
+	return returnElement;
 }
 
 } // namespace LWMessageQueue
