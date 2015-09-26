@@ -1,1 +1,5 @@
 *.suo
+*.sdf
+*.o
+Example/Debug
+Example/example
