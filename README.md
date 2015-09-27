@@ -15,3 +15,9 @@ Messages are defined as POD type structs, and a union of those structs is passed
 Messages of any type (from the MESSAGE union) can be pushed to an input channel. When popping messages you get an LWMessageQueue<>::MessageContainer instance. To get the actual message from the container, first call messageContainer.isOfType<TYPE>() to determine the type, and then call messageContainer.getMessage<TYPE>() to get the message data cast to the correct POD type struct.
 
 See Example/Message.h and Example/example.cpp for more details on how to use LWMessageQueue and how to define messages.
+
+## Dependencies
+Uses the following C++11 features that can be removed if someone needs to use this with an older compiler:
+* std::atomic<> - Replace with OS specific atomic or gcc extension __sync_fetch_and_add()
+* Deleted functions (=delete) - Replace with empty implementation instead {}
+* constexpr - An optimization. Simply remove the constexpr keyword
