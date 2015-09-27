@@ -21,3 +21,41 @@ Uses the following C++11 features that can be removed if someone needs to use th
 * std::atomic<> - Replace with OS specific atomic or gcc extension __sync_fetch_and_add()
 * Deleted functions (=delete) - Replace with empty implementation instead {}
 * constexpr - An optimization. Simply remove the constexpr keyword
+
+## Example
+
+```
+// Declare message types
+struct Message1 {
+	uint32_t value;
+};
+
+struct Message2 {
+  uint32_t value;
+  char* stringRef;
+};
+
+// Add the message data structs to a message union that is passed as a template parameter
+// to LWMessageQueue.
+union MessageUnion {
+  Message1 message1;
+  Message2 message2;
+};
+
+// Declare LWMessageQueue instance
+using MessageQueue = LWMessageQueue::LWMessageQueue<queueSize, numChannels, MessageUnion>;
+MessageQueue messageQueue;
+
+// Push message
+MessageQueue::ThreadChannelInput threadChannelInput = messageQueue.getThreadChannelInput(0);
+Message1 message;
+message.value = 17;
+threadChannelInput.pushMessage(message);
+
+// Consume message
+MessageQueue::ThreadChannelOutput threadChannelOutput = messageQueue.getThreadChannelOutput(0);
+MessageQueue::MessageContainer messageContainer = threadChannelOutput.popMessage();
+if (messageContainer.isOfType<Message1>()) {
+  const Message1& message = messageContainer.getMessage<Message1>();
+}
+```
