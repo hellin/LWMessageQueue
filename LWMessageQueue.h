@@ -215,6 +215,8 @@ template<typename T>
 void LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannelInput::pushMessage(
 	const T& inMessage)
 {
+	static_assert(sizeof(T) <= sizeof(MESSAGE), "Type T might not be part of union MESSAGE. Size mismatch.");
+	static_assert(alignof(T) % alignof(MESSAGE) == 0, "Type T might not be part of union MESSAGE. Alignment mismatch.");
 	MessageContainer messageContainer;
 	messageContainer.typeId = Internal::typeIdOf(inMessage);
 
