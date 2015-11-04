@@ -73,7 +73,7 @@ namespace LWMessageQueue {
 template<uint32_t SIZE, uint32_t CHANNELS, typename MESSAGE>
 class LWMessageQueue {
 private:
-		class ThreadChannel;
+	class ThreadChannel;
 public:
 	/** Used for message storage in the queue. When you pop a message from an output channel, you get instances
 		of this type.
@@ -216,7 +216,7 @@ void LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannelInput::pushMessage(
 	const T& inMessage)
 {
 	static_assert(sizeof(T) <= sizeof(MESSAGE), "Type T might not be part of union MESSAGE. Size mismatch.");
-	static_assert(alignof(T) % alignof(MESSAGE) == 0, "Type T might not be part of union MESSAGE. Alignment mismatch.");
+	static_assert(alignof(MESSAGE) % alignof(T) == 0, "Type T might not be part of union MESSAGE. Alignment mismatch.");
 	MessageContainer messageContainer;
 	messageContainer.typeId = Internal::typeIdOf(inMessage);
 
