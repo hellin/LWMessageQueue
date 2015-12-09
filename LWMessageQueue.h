@@ -82,11 +82,11 @@ public:
 	public:
 		/** Get a reference to the message data, as the correct message type. */
 		template<typename T>
-		constexpr const T& getMessage() const;
+		constexpr const T& getMessage() const noexcept;
 
 		/** Check if a message container contains a message of a specific type. */
 		template<typename T>
-		constexpr bool isOfType() const;
+		constexpr bool isOfType() const noexcept;
 
 	private:
 		uintptr_t typeId;
@@ -97,20 +97,20 @@ public:
 	/** Each input thread has its own ThreadChannelInput instance. Use it to push messages to the queue. */
 	class ThreadChannelInput {
 	public:
-		ThreadChannelInput(ThreadChannel& inThreadChannel);
+		ThreadChannelInput(ThreadChannel& inThreadChannel) noexcept;
+		ThreadChannelInput(const ThreadChannelInput& other) = default;
+		ThreadChannelInput& operator=(const ThreadChannelInput& other) = default;
 
 		/** Check if the channel is full. No more messages can be pushed. Should only be used for debugging purposes.
 			The MessageQueue should always be dimensioned so that this does not happen.
 		*/
-		bool isFull() const;
+		inline bool isFull() const noexcept;
 
 		/** Push a message to the channel. The user must make sure the channel is not full before calling. Only 
 			one thread may push messages to a single channel.
 		*/
 		template<typename T>
-		void pushMessage(const T& inMessage);
-
-		const ThreadChannelInput& operator=(const ThreadChannelInput& other);
+		void pushMessage(const T& inMessage) noexcept;
 	private:
 		ThreadChannel& threadChannel;
 	};
@@ -120,13 +120,15 @@ public:
 	*/
 	class ThreadChannelOutput {
 	public:
-		ThreadChannelOutput(ThreadChannel& inThreadChannel);
+		ThreadChannelOutput(ThreadChannel& inThreadChannel) noexcept;
+		ThreadChannelOutput(const ThreadChannelOutput& other) = default;
+		ThreadChannelOutput& operator=(const ThreadChannelOutput& other) = default;
 
 		/** Get number of pending messages in the channel. The output thread should get this number and then pop
 			exactly that many messages from the channel. This way it is guaranteed that an empty channel is not 
 			popped and that the output thread receive loop finishes.
 		*/
-		uint32_t getNumMessages() const;
+		inline uint32_t getNumMessages() const noexcept;
 
 		/** Pop the next message from the channel. The user must make sure that the channel is not empty before 
 			calling. Only one thread may pop messages from all channels.
@@ -134,43 +136,50 @@ public:
 			@return A MessageContainer. Check type by calling messageContainer.isOfType<MESSAGE_TYPE>(); 
 			Then get the message data with correct type by calling messageContainer.getMessage<MESSAGE_TYPE>();
 		*/
-		MessageContainer popMessage();
+		inline MessageContainer popMessage() noexcept;
 
-		const ThreadChannelOutput& operator=(const ThreadChannelOutput& other);
 	private:
 		ThreadChannel& threadChannel;
 	};
 
-	LWMessageQueue();
+	LWMessageQueue() = default;
+	~LWMessageQueue() = default;
+
+	LWMessageQueue(const LWMessageQueue&) = delete;
+	LWMessageQueue& operator=(const LWMessageQueue&) = delete;
+	LWMessageQueue(const LWMessageQueue&&) = delete;
+	LWMessageQueue& operator=(const LWMessageQueue&&) = delete;
 
 	/** Get a thread channel input for an input thread. */
-	ThreadChannelInput getThreadChannelInput(const uint32_t inChannel);
+	ThreadChannelInput getThreadChannelInput(const uint32_t inChannel) noexcept;
 
 	/** Get a thread channel output for the output thread. */
-	ThreadChannelOutput getThreadChannelOutput(const uint32_t inChannel);
+	ThreadChannelOutput getThreadChannelOutput(const uint32_t inChannel) noexcept;
 
 private:
 	class ThreadChannel {
 	public:
-		ThreadChannel();
-		uint32_t size() const;
-		void pushBack(const MessageContainer& inElement);
-		MessageContainer popFront();
+		ThreadChannel() noexcept;
+		~ThreadChannel() = default;
+
+		ThreadChannel(const ThreadChannel&) = delete;
+		const ThreadChannel& operator=(const ThreadChannel&) = delete;
+		ThreadChannel(const ThreadChannel&&) = delete;
+		const ThreadChannel& operator=(const ThreadChannel&&) = delete;
+
+		inline uint32_t size() const noexcept;
+		void pushBack(const MessageContainer& inElement) noexcept;
+		MessageContainer popFront() noexcept;
 
 	private:
 		MessageContainer elements[SIZE];
 		uint32_t readPoint;
 		uint32_t writePoint;
 		std::atomic<uint32_t> numElements;
-
-		ThreadChannel(const ThreadChannel&) = delete;
-		const ThreadChannel& operator=(const ThreadChannel&) = delete;
 	};
 
 	ThreadChannel threadChannels[CHANNELS];
-
-	LWMessageQueue(const LWMessageQueue&) = delete;
-	const LWMessageQueue& operator=(const LWMessageQueue&) = delete;
+	static constexpr uint32_t sizeMinusOne = SIZE - 1;
 };
 
 namespace Internal {
@@ -179,46 +188,50 @@ namespace Internal {
 	typeIdOf::typeId<T> will be unique for every type and can be used as a type id. 
 */
 template<typename T>
-uintptr_t typeIdOf(const T&) {
+uintptr_t typeIdOf() {
 	static uintptr_t typeId = reinterpret_cast<uintptr_t>(&typeId);
 	return typeId;
+}
+
+constexpr bool isPowerOfTwo(const uint32_t value) {
+	return (value != 0) && ((value & (value - 1)) == 0);
 }
 
 } // namespace Internal
 
 template<uint32_t SIZE, uint32_t CHANNELS, typename MESSAGE>
 template<typename T>
-constexpr const T& LWMessageQueue<SIZE, CHANNELS, MESSAGE>::MessageContainer::getMessage() const {
+constexpr const T& LWMessageQueue<SIZE, CHANNELS, MESSAGE>::MessageContainer::getMessage() const noexcept {
 	return *(reinterpret_cast<const T*>(&message));
 }
 
 template<uint32_t SIZE, uint32_t CHANNELS, typename MESSAGE>
 template<typename T>
-constexpr bool LWMessageQueue<SIZE, CHANNELS, MESSAGE>::MessageContainer::isOfType() const {
-	return Internal::typeIdOf(T()) == typeId;
+constexpr bool LWMessageQueue<SIZE, CHANNELS, MESSAGE>::MessageContainer::isOfType() const noexcept {
+	return Internal::typeIdOf<T>() == typeId;
 }
 
 template<uint32_t SIZE, uint32_t CHANNELS, typename MESSAGE>
 LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannelInput::ThreadChannelInput(
-	ThreadChannel& inThreadChannel)
+	ThreadChannel& inThreadChannel) noexcept
 	: threadChannel(inThreadChannel)
 {
 }
 
 template<uint32_t SIZE, uint32_t CHANNELS, typename MESSAGE>
-bool LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannelInput::isFull() const {
+inline bool LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannelInput::isFull() const noexcept {
 	return (threadChannel.size() == SIZE);
 }
 
 template<uint32_t SIZE, uint32_t CHANNELS, typename MESSAGE>
 template<typename T>
 void LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannelInput::pushMessage(
-	const T& inMessage)
+	const T& inMessage) noexcept
 {
 	static_assert(sizeof(T) <= sizeof(MESSAGE), "Type T might not be part of union MESSAGE. Size mismatch.");
 	static_assert(alignof(MESSAGE) % alignof(T) == 0, "Type T might not be part of union MESSAGE. Alignment mismatch.");
 	MessageContainer messageContainer;
-	messageContainer.typeId = Internal::typeIdOf(inMessage);
+	messageContainer.typeId = Internal::typeIdOf<T>();
 
 	T* messageData = reinterpret_cast<T*>(&messageContainer.message);
 	*messageData = inMessage;
@@ -227,92 +240,71 @@ void LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannelInput::pushMessage(
 }
 
 template<uint32_t SIZE, uint32_t CHANNELS, typename MESSAGE>
-const typename LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannelInput& 
-LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannelInput::operator=(
-	const typename LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannelInput& other)
-{
-	threadChannel = other.threadChannel;
-	return *this;
-}
-
-template<uint32_t SIZE, uint32_t CHANNELS, typename MESSAGE>
 LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannelOutput::ThreadChannelOutput(
-	ThreadChannel& inThreadChannel)
+	ThreadChannel& inThreadChannel) noexcept
 	: threadChannel(inThreadChannel)
 {
 }
 
 template<uint32_t SIZE, uint32_t CHANNELS, typename MESSAGE>
-uint32_t LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannelOutput::getNumMessages() const {
+inline uint32_t LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannelOutput::getNumMessages() const noexcept {
 	return threadChannel.size();
 }
 
 template<uint32_t SIZE, uint32_t CHANNELS, typename MESSAGE>
 typename LWMessageQueue<SIZE, CHANNELS, MESSAGE>::MessageContainer 
-LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannelOutput::popMessage() {
+inline LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannelOutput::popMessage() noexcept {
 	return threadChannel.popFront();
 }
 
 template<uint32_t SIZE, uint32_t CHANNELS, typename MESSAGE>
-const typename LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannelOutput&
-LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannelOutput::operator=(
-	const typename LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannelOutput& other)
-{
-	threadChannel = other.threadChannel;
-	return *this;
-}
-
-template<uint32_t SIZE, uint32_t CHANNELS, typename MESSAGE>
-LWMessageQueue<SIZE, CHANNELS, MESSAGE>::LWMessageQueue() {
-}
-
-template<uint32_t SIZE, uint32_t CHANNELS, typename MESSAGE>
 typename LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannelInput 
-LWMessageQueue<SIZE, CHANNELS, MESSAGE>::getThreadChannelInput(const uint32_t inChannel) {
+LWMessageQueue<SIZE, CHANNELS, MESSAGE>::getThreadChannelInput(const uint32_t inChannel) noexcept {
 	assert(inChannel < CHANNELS);
 	return ThreadChannelInput(threadChannels[inChannel]);
 }
 
 template<uint32_t SIZE, uint32_t CHANNELS, typename MESSAGE>
 typename LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannelOutput 
-LWMessageQueue<SIZE, CHANNELS, MESSAGE>::getThreadChannelOutput(const uint32_t inChannel) {
+LWMessageQueue<SIZE, CHANNELS, MESSAGE>::getThreadChannelOutput(const uint32_t inChannel) noexcept {
 	assert(inChannel < CHANNELS);
 	return ThreadChannelOutput(threadChannels[inChannel]);
 }
 
 template<uint32_t SIZE, uint32_t CHANNELS, typename MESSAGE>
-LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannel::ThreadChannel()
+LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannel::ThreadChannel() noexcept
 	: readPoint(0),
 	writePoint(0),
 	numElements(0)
 {
+	static_assert(Internal::isPowerOfTwo(SIZE), "Template parameter SIZE must be a power of two.");
 }
 
 template<uint32_t SIZE, uint32_t CHANNELS, typename MESSAGE>
-uint32_t LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannel::size() const {
+inline uint32_t LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannel::size() const noexcept {
 	return numElements;
 }
 
 template<uint32_t SIZE, uint32_t CHANNELS, typename MESSAGE>
 void LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannel::pushBack(
-	const MessageContainer& inElement)
+	const MessageContainer& inElement) noexcept
 {
 	assert(numElements < SIZE);
 	assert(writePoint < SIZE);
 
 	elements[writePoint] = inElement;
-	writePoint = (writePoint + 1) % SIZE;
+	writePoint = (writePoint + 1) & sizeMinusOne; 
 	numElements.fetch_add(1);
 }
 
 template<uint32_t SIZE, uint32_t CHANNELS, typename MESSAGE>
 typename LWMessageQueue<SIZE, CHANNELS, MESSAGE>::MessageContainer 
-LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannel::popFront() {
+LWMessageQueue<SIZE, CHANNELS, MESSAGE>::ThreadChannel::popFront() noexcept {
 	assert(numElements > 0);
 	assert(readPoint < SIZE);
 
 	MessageContainer returnElement = elements[readPoint];
-	readPoint = (readPoint + 1) % SIZE;
+	readPoint = (readPoint + 1) & sizeMinusOne;
 	numElements.fetch_sub(1);
 
 	return returnElement;
