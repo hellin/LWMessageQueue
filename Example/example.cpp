@@ -8,7 +8,7 @@ const uint32_t numMessages = 1000;
 const uint32_t numMessagesPerThread = numMessages * 2;
 const uint32_t queueSize = 2048;
 
-using MessageQueue = LWMessageQueue::LWMessageQueue<queueSize, numChannels, MessageUnion>;
+using MessageQueue = LWMessageQueue::LWMessageQueue<queueSize, numChannels, MessageUnion, MessageType>;
 
 void inputThread0Run(MessageQueue::ThreadChannelInput inChannel) {
 	for (uint32_t i = 0; i < numMessages; ++i) {
@@ -18,7 +18,7 @@ void inputThread0Run(MessageQueue::ThreadChannelInput inChannel) {
 			message.anotherValue = 4711;
 
 			assert(!inChannel.isFull());
-			inChannel.pushMessage(message);
+			inChannel.pushMessage(message, MessageType::Message1);
 		}
 
 		{
@@ -29,7 +29,7 @@ void inputThread0Run(MessageQueue::ThreadChannelInput inChannel) {
 			message.moreValues[1] = 0;
 
 			assert(!inChannel.isFull());
-			inChannel.pushMessage(message);
+			inChannel.pushMessage(message, MessageType::Message2);
 		}
 	}
 	fprintf(stdout, "Input thread 0 done, sent %u messages.\n", numMessagesPerThread);
@@ -43,7 +43,7 @@ void inputThread1Run(MessageQueue::ThreadChannelInput inChannel) {
 			message.anotherValue = 4711;
 
 			assert(!inChannel.isFull());
-			inChannel.pushMessage(message);
+			inChannel.pushMessage(message, MessageType::Message1);
 		}
 
 		{
@@ -54,27 +54,33 @@ void inputThread1Run(MessageQueue::ThreadChannelInput inChannel) {
 			message.moreValues[1] = 1;
 
 			assert(!inChannel.isFull());
-			inChannel.pushMessage(message);
+			inChannel.pushMessage(message, MessageType::Message2);
 		}
 	}
 	fprintf(stdout, "Input thread 1 done, sent %u messages.\n", numMessagesPerThread);
 }
 
 void verifyMessage(const uint32_t channelIndex, const MessageQueue::MessageContainer& messageContainer) {
-	if (messageContainer.isOfType<Message1>()) {
-		const Message1& message = messageContainer.getMessage<Message1>();
-		assert(message.value == 17);
-		assert(message.anotherValue == 4711);
-
-	} else if (messageContainer.isOfType<Message2>()) {
-		const Message2& message = messageContainer.getMessage<Message2>();
-		assert(message.value == channelIndex);
-		assert(message.anotherValue == channelIndex);
-		assert(message.moreValues[0] == channelIndex);
-		assert(message.moreValues[1] == channelIndex);
-
-	} else {
+	switch (messageContainer.getType()) {
+	case MessageType::Message1:
+		{
+			const Message1& message = messageContainer.getMessage<Message1>();
+			assert(message.value == 17);
+			assert(message.anotherValue == 4711);
+		}
+		break;
+	case MessageType::Message2:
+		{
+			const Message2& message = messageContainer.getMessage<Message2>();
+			assert(message.value == channelIndex);
+			assert(message.anotherValue == channelIndex);
+			assert(message.moreValues[0] == channelIndex);
+			assert(message.moreValues[1] == channelIndex);
+		}
+		break;
+	default:
 		assert(false);
+		break;
 	}
 }
 

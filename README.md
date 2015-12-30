@@ -12,7 +12,7 @@ It is also up to the user to never pop messages from an empty channel. This shou
 
 Messages are defined as POD type structs, and a union of those structs is passed as a template parameter (MESSAGE) to LWMessageQueue. Push and pop operations copy the message data, so structs should be small enuough so that this still is a cheap operation.
 
-Messages of any type (from the MESSAGE union) can be pushed to an input channel. When popping messages you get an LWMessageQueue<>::MessageContainer instance. To get the actual message from the container, first call messageContainer.isOfType<TYPE>() to determine the type, and then call messageContainer.getMessage<TYPE>() to get the message data cast to the correct POD type struct.
+Messages of any type (from the MESSAGE union) can be pushed to an input channel. When popping messages you get an LWMessageQueue<>::MessageContainer instance. To get the actual message from the container, first call messageContainer.getType() to determine the type, and then call messageContainer.getMessage<TYPE>() to get the message data cast to the correct POD type struct 
 
 See Example/Message.h and Example/example.cpp for more details on how to use LWMessageQueue and how to define messages.
 
@@ -36,20 +36,36 @@ union MessageUnion {
   Message2 message2;
 };
 
+// Add the message types to an enum class that is passed as a template parameter
+// to LWMessageQueue.
+enum class MessageTypes {
+	Message1,
+	Message2
+}
+
 // Declare LWMessageQueue instance
-using MessageQueue = LWMessageQueue::LWMessageQueue<queueSize, numChannels, MessageUnion>;
+using MessageQueue = LWMessageQueue::LWMessageQueue<queueSize, numChannels, MessageUnion, MessageTypes>;
 MessageQueue messageQueue;
 
 // Push message
 MessageQueue::ThreadChannelInput threadChannelInput = messageQueue.getThreadChannelInput(0);
 Message1 message;
 message.value = 17;
-threadChannelInput.pushMessage(message);
+threadChannelInput.pushMessage(message, MessageTypes::Message1);
 
 // Consume message
 MessageQueue::ThreadChannelOutput threadChannelOutput = messageQueue.getThreadChannelOutput(0);
 MessageQueue::MessageContainer messageContainer = threadChannelOutput.popMessage();
-if (messageContainer.isOfType<Message1>()) {
-  const Message1& message = messageContainer.getMessage<Message1>();
+switch (messageContainer.getType()) {
+	case MessageTypes::Message1:
+		const Message1& message = messageContainer.getMessage<Message1>();
+		// Process message
+		break;
+	case MessageTypes::Message2:
+		const Message2& message = messageContainer.getMessage<Message2>();
+		// Process message
+		break;
+	default:
+		break;
 }
 ```

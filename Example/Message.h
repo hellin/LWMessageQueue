@@ -21,3 +21,10 @@ union MessageUnion {
 	Message1 message1;
 	Message2 message2;
 };
+
+// Add the message type to an enum class that is passed as a template parameter
+// to LWMessageQueue.
+enum class MessageType {
+	Message1, 
+	Message2
+};
