@@ -1,25 +1,17 @@
-#include <assert.h>
+#include <exception>
 #include <iostream>
 #include <memory>
+#include <sstream>
+#include <string>
+#include <stdint.h>
 #include <thread>
 #include <vector>
 #include "LWMessageQueue.h"
+#include "TestUtils.h"
+
+using namespace TestUtils;
 
 namespace {
-
-class ScopedFunctionTrace {
-public:
-	ScopedFunctionTrace(const char* inFunctionName)
-	: functionName(inFunctionName)
-	{
-		std::cout << "-- " << functionName << " begin" << std::endl;		
-	}
-	~ScopedFunctionTrace() {
-		std::cout << "   " << functionName << " end" << std::endl;
-	}
-private:
-	std::string functionName;
-};
 
 struct Message1 {
 	uint32_t value;
@@ -51,7 +43,7 @@ enum class MessageType {
 } // namespace
 
 void pushMessageTest() {
-	ScopedFunctionTrace(__FUNCTION__);
+	TEST_ENTER;
 
 	using MessageQueue = LWMessageQueue::LWMessageQueue<1, 1, MessageUnion, MessageType>;
 	std::unique_ptr<MessageQueue> messageQueue(new MessageQueue());
@@ -59,17 +51,17 @@ void pushMessageTest() {
 	MessageQueue::ThreadChannelOutput channelOutput = messageQueue->getThreadChannelOutput(0);
 	MessageQueue::ThreadChannelInput channelInput = messageQueue->getThreadChannelInput(0);
 	
-	assert(channelOutput.getNumMessages() == 0);
+	TEST_VERIFY(channelOutput.getNumMessages() == 0);
 
 	Message1 message;
 	message.value = 0;
 	channelInput.pushMessage(message, MessageType::Message1);
 
-	assert(channelOutput.getNumMessages() == 1);
+	TEST_VERIFY(channelOutput.getNumMessages() == 1);
 }
 
 void popMessageTest() {
-	ScopedFunctionTrace(__FUNCTION__);
+	TEST_ENTER;
 
 	using MessageQueue = LWMessageQueue::LWMessageQueue<1, 1, MessageUnion, MessageType>;
 	std::unique_ptr<MessageQueue> messageQueue(new MessageQueue());
@@ -83,16 +75,16 @@ void popMessageTest() {
 	channelInput.pushMessage(message, MessageType::Message2);
 
 	MessageQueue::MessageContainer messageContainer = channelOutput.popMessage();
-	assert(channelOutput.getNumMessages() == 0);
+	TEST_VERIFY(channelOutput.getNumMessages() == 0);
 
-	assert(messageContainer.getType() == MessageType::Message2);
+	TEST_VERIFY(messageContainer.getType() == MessageType::Message2);
 	const Message2& poppedMessage = messageContainer.getMessage<Message2>();
-	assert(poppedMessage.charValue == 3);
-	assert(poppedMessage.uintValue == 5);
+	TEST_VERIFY(poppedMessage.charValue == 3);
+	TEST_VERIFY(poppedMessage.uintValue == 5);
 }
 
 void isFullTest() {
-	ScopedFunctionTrace(__FUNCTION__);
+	TEST_ENTER;
 
 	using MessageQueue = LWMessageQueue::LWMessageQueue<2, 2, MessageUnion, MessageType>;
 	std::unique_ptr<MessageQueue> messageQueue(new MessageQueue());
@@ -107,22 +99,22 @@ void isFullTest() {
 	channel0Input.pushMessage(message, MessageType::Message1);
 	channel1Input.pushMessage(message, MessageType::Message1);
 
-	assert(!channel0Input.isFull());
-	assert(!channel1Input.isFull());
+	TEST_VERIFY(!channel0Input.isFull());
+	TEST_VERIFY(!channel1Input.isFull());
 
 	channel0Input.pushMessage(message, MessageType::Message1);
 	channel1Input.pushMessage(message, MessageType::Message1);
 
-	assert(channel0Input.isFull());
-	assert(channel1Input.isFull());
+	TEST_VERIFY(channel0Input.isFull());
+	TEST_VERIFY(channel1Input.isFull());
 
 	MessageQueue::MessageContainer messageContainer = channel0Output.popMessage();
 	messageContainer = channel0Output.popMessage();
 	messageContainer = channel1Output.popMessage();
 	messageContainer = channel1Output.popMessage();
 
-	assert(!channel0Input.isFull());
-	assert(!channel1Input.isFull());
+	TEST_VERIFY(!channel0Input.isFull());
+	TEST_VERIFY(!channel1Input.isFull());
 }
 
 namespace MultiThreadTest {
@@ -149,46 +141,50 @@ void verifyMessage(MessageQueue::MessageContainer&& inMessageContainer, const ui
 	case MessageType::Message1:
 		{
 			const auto& message = inMessageContainer.getMessage<Message1>();
-			assert(message.value == inChannelIndex);
+			TEST_VERIFY(message.value == inChannelIndex);
 		}
 		break;
 	case MessageType::Message2:
 		{
 			const auto& message = inMessageContainer.getMessage<Message2>();
-			assert(message.uintValue == inChannelIndex && message.charValue == static_cast<char>(inChannelIndex));
+			TEST_VERIFY(message.uintValue == inChannelIndex && message.charValue == static_cast<char>(inChannelIndex));
 		}
 		break;
 	default:
-		assert(false);
+		TEST_VERIFY(inMessageContainer.getType() == MessageType::Message1 || inMessageContainer.getType() == MessageType::Message2);
 		break;
 	}
 }
 
 void outputThreadEntry(std::shared_ptr<MessageQueue> inMessageQueue, const uint32_t inQueueSize, const uint32_t inNumInputThreads) {
-	std::vector<MessageQueue::ThreadChannelOutput> channelOutputs;
-	channelOutputs.reserve(inNumInputThreads);
+	try {
+		std::vector<MessageQueue::ThreadChannelOutput> channelOutputs;
+		channelOutputs.reserve(inNumInputThreads);
 
-	for (uint32_t channelIndex = 0; channelIndex < inNumInputThreads; ++channelIndex) {
-		channelOutputs.push_back(inMessageQueue->getThreadChannelOutput(channelIndex));
-	}
-
-	const uint32_t totalMessages = inQueueSize * inNumInputThreads;
-	uint32_t receivedMessages = 0;
-
-	while (receivedMessages < totalMessages) {
 		for (uint32_t channelIndex = 0; channelIndex < inNumInputThreads; ++channelIndex) {
-			MessageQueue::ThreadChannelOutput& channelOutput = channelOutputs[channelIndex];
-			if (channelOutput.getNumMessages() != 0) {
-				verifyMessage(channelOutput.popMessage(), channelIndex);
-				++receivedMessages;
+			channelOutputs.push_back(inMessageQueue->getThreadChannelOutput(channelIndex));
+		}
+
+		const uint32_t totalMessages = inQueueSize * inNumInputThreads;
+		uint32_t receivedMessages = 0;
+
+		while (receivedMessages < totalMessages) {
+			for (uint32_t channelIndex = 0; channelIndex < inNumInputThreads; ++channelIndex) {
+				MessageQueue::ThreadChannelOutput& channelOutput = channelOutputs[channelIndex];
+				if (channelOutput.getNumMessages() != 0) {
+					verifyMessage(channelOutput.popMessage(), channelIndex);
+					++receivedMessages;
+				}
 			}
 		}
+		std::cout << "   Output thread received " << receivedMessages << " messages" << std::endl;
+	} catch (const TestFailure& exception) {
+		std::cout << "Test failed: " << exception.getInfo() << std::endl;
 	}
-	std::cout << "   Output thread received " << receivedMessages << " messages" << std::endl;
 }
 
 void multiThreadTest() {
-	ScopedFunctionTrace(__FUNCTION__);
+	TEST_ENTER;
 
 	std::shared_ptr<MessageQueue> messageQueue(new MessageQueue());
 
@@ -210,11 +206,16 @@ void multiThreadTest() {
 } // namespace MultiThreadTest
 
 int main(int, char**) {
-	pushMessageTest();
-	popMessageTest();
-	isFullTest();
-	MultiThreadTest::multiThreadTest();
+	try {
+		pushMessageTest();
+		popMessageTest();
+		isFullTest();
+		MultiThreadTest::multiThreadTest();
+	}
+	catch (const TestFailure& exception) {
+		std::cout << "Test failed: " << exception.getInfo() << std::endl;
+		return 1;
+	}
 
-	std::cout << "Tests passed" << std::endl;
 	return 0;
 }
