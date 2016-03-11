@@ -39,5 +39,5 @@ private:
 
 } // namespace TestUtils
 
-#define TEST_ENTER ScopedFunctionTrace(__FUNCTION__);
+#define TEST_ENTER ScopedFunctionTrace testUtilsScopedFunctionTrace(__FUNCTION__);
 #define TEST_VERIFY(x) if ((x) == false) {throw TestFailure(#x, __FUNCTION__, __LINE__); }
